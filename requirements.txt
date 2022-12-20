@@ -1,0 +1,3 @@
+python-dotenv
+pathlib3x
+google-cloud-vision
