@@ -10,12 +10,25 @@ MAX_RESULTS = 5  # the maximum number of faces for the AI to detect
 
 
 def init_client():
-    # Init API client
+    """Initialise the API client
+
+    :return: initialised API connection
+    :rtype: class:`google.cloud.vision.ImageAnnotatorClient`
+    """
     client = vision.ImageAnnotatorClient()
     return client
 
 
 def analyse(image, client):
+    """Analyse a given image using the API client
+
+    :param image: the image to analyse
+    :type image: class:`google.cloud.vision.Image`
+    :param client: the API client to use
+    :type client: class:`google.cloud.vision.ImageAnnotatorClient`
+    :return: The results of the analysis
+    :rtype: dict
+    """
     # do the thing
     response = client.face_detection(image=image, max_results=MAX_RESULTS)
 
@@ -26,6 +39,7 @@ def analyse(image, client):
 
 
 def main():
+    """Main function; parses command-line arguments, reads in an image, and calls the API to analyse it."""
     # Argument parsing
     parser = argparse.ArgumentParser(
         prog="Google Vision ERA",
@@ -51,10 +65,10 @@ def main():
     # read the input file into an Image object
     with io.open(inp, "rb") as f:
         content = f.read()
-
-    client = init_client()
     image = vision.Image(content=content)
 
+    # initiliase the client and use it
+    client = init_client()
     faces = analyse(image, client)
 
     # save to JSON
@@ -75,19 +89,24 @@ def main():
             print(f" - Surprise: {face['surprise_likelihood']}")
 
 
-# Helper function to convert the API output to a usable format (python dict)
 def annotations_to_dict(faces):
+    """Converts the results of facial analysis into a Python dictionary
+
+    :param faces: The results to convert
+    :type faces: class:`google.cloud.vision.FaceAnnotation`
+    :return: The much more intuitively usable dictionary form
+    :rtype: dict
+    """
     out = []
     for face in faces:
         out_elem = {}
         nest_stack = [out_elem]
-        lines = face.__str__().split(
-            "\n"
-        )  # only way to serialise the data that actually preserves most of it
+        # serialise the data for this face into a string
+        lines = face.__str__().split("\n")
         for line in lines:
-            if line.strip() == "":
+            if line.strip() == "":  # skip empty lines
                 continue
-            elif line[-1] == "{":
+            elif line[-1] == "{":  # start of a new block
                 key = line[:-1].strip()  # take off the { and strip any spaces
                 new_obj = {}
 
@@ -99,9 +118,9 @@ def annotations_to_dict(faces):
                 else:
                     nest_stack[-1][key] = new_obj
                 nest_stack.append(new_obj)
-            elif line[-1] == "}":
+            elif line[-1] == "}":  # end of a block
                 nest_stack.pop()
-            else:
+            else:  # normal key:value pair
                 k, v = line.split(":")
                 k = k.strip()
                 v = v.strip()
