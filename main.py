@@ -45,7 +45,7 @@ def highlight_faces(image, faces):
                   fill='#FF0000')
     return im
 
-def analyse(image_file, client, max_results=5):
+def analyse(image_file, client, max_results=1):
     """Analyse a given image using the API client
 
     :param image: a file pointer to the image to analyse
@@ -81,7 +81,7 @@ def main():
     output.add_argument(
         "-s", "--no-save", action="store_true", help="Do not save the data."
     )
-    parser.add_argument("-n", "--number", default=5, type=int, help="Maximum number of faces to detect.")
+    parser.add_argument("-n", "--number", default=1, type=int, help="Maximum number of faces to detect.")
     args = parser.parse_args()
 
     # input and output file paths
