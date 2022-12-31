@@ -5,8 +5,9 @@ from google.cloud import vision  # Google Vision AI API
 import argparse  # CLI argument parsing
 import json  # saving the output as JSON
 
+import PIL.Image, PIL.ImageDraw
+
 load_dotenv()
-MAX_RESULTS = 5  # the maximum number of faces for the AI to detect
 
 
 def init_client():
@@ -19,23 +20,47 @@ def init_client():
     return client
 
 
-def analyse(image, client):
+def highlight_faces(image, faces):
+    """Draws a polygon around the faces. From https://github.com/GoogleCloudPlatform/python-docs-samples/blob/main/vision/snippets/face_detection/faces.py
+
+    :param image: a file pointer to the image
+    :type image: BinaryIO
+    :param faces: a list of faces found in the file. This should be in the format returned by the Vision API.
+    :type faces: class:`google.cloud.vision.FaceAnnotation`
+    :return: an image with the faces highlighted.
+    :rtype: class:`PIL.Image`
+    """
+    im = PIL.Image.open(image)
+    draw = PIL.ImageDraw.Draw(im)
+    # Sepecify the font-family and the font-size
+    for face in faces:
+        box = [(vertex.x, vertex.y)
+               for vertex in face.bounding_poly.vertices]
+        draw.line(box + [box[0]], width=5, fill='#00ff00')
+        # Place the confidence value/score of the detected faces above the
+        # detection box in the output image
+        draw.text(((face.bounding_poly.vertices)[0].x,
+                   (face.bounding_poly.vertices)[0].y - 30),
+                  str(format(face.detection_confidence, '.3f')) + '%',
+                  fill='#FF0000')
+    return im
+
+def analyse(image_file, client, max_results=5):
     """Analyse a given image using the API client
 
-    :param image: the image to analyse
-    :type image: class:`google.cloud.vision.Image`
+    :param image: a file pointer to the image to analyse
+    :type image: BinaryIO
     :param client: the API client to use
     :type client: class:`google.cloud.vision.ImageAnnotatorClient`
     :return: The results of the analysis
     :rtype: dict
     """
+    image = vision.Image(content=image_file)
+
     # do the thing
-    response = client.face_detection(image=image, max_results=MAX_RESULTS)
+    response = client.face_detection(image=image, max_results=max_results)
 
-    # convert output to a format I can actually use
-    faces = annotations_to_dict(response.face_annotations)
-
-    return faces
+    return response.face_annotations
 
 
 def main():
@@ -54,27 +79,33 @@ def main():
         help="Remove output message, just save the data.",
     )
     output.add_argument(
-        "-n", "--no-save", action="store_true", help="Do not save the data."
+        "-s", "--no-save", action="store_true", help="Do not save the data."
     )
+    parser.add_argument("-n", "--number", default=5, type=int, help="Maximum number of faces to detect.")
     args = parser.parse_args()
 
     # input and output file paths
     inp = Path(args.file)
     out = inp.append_suffix(".json")
+    out_img = inp.with_suffix('.hl.jpg')
 
-    # read the input file into an Image object
+    # read the input file
     with io.open(inp, "rb") as f:
         content = f.read()
-    image = vision.Image(content=content)
 
-    # initiliase the client and use it
-    client = init_client()
-    faces = analyse(image, client)
+        # initiliase the client and use it
+        client = init_client()
+        res = analyse(content, client, max_results=args.number)
+        faces = annotations_to_dict(res)
+        f.seek(0)
+        highlighted = highlight_faces(f, res)
 
-    # save to JSON
+    # save to JSON, and save the highlighted image
     if not args.no_save:
         with open(out, "w") as f:
             json.dump(faces, f)
+        with open(out_img, "wb") as f:
+            highlighted.save(f)
 
     # print results of ERA
     if not args.quiet:
